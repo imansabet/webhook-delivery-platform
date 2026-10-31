@@ -24,43 +24,4 @@ This platform acts as a reliable middleware between event producers and consumer
 ## Main Goal
 
 **Never silently lose an event. Make webhook delivery reliable, observable, and manageable.**
-
-flowchart LR
-    subgraph Producers
-        A["E-commerce"]
-        B["CRM"]
-        C["Other Services"]
-    end
-
-    subgraph Platform["Webhook Delivery Platform"]
-        D["REST API"]
-        E[("Database")]
-        F["Message Queue"]
-        G["Worker"]
-        H["Retry Engine"]
-        I["Dead Letter Queue"]
-        J["Monitoring"]
-
-        D --> E
-        E --> F
-        F --> G
-        G --> H
-        H --> F
-        H --> I
-        G --> J
-        I --> J
-    end
-
-    subgraph Consumers
-        K["Accounting System"]
-        L["CRM Endpoint"]
-        M["Notification Service"]
-    end
-
-    A --> D
-    B --> D
-    C --> D
-
-    G -->|"Signed HTTP POST"| K
-    G -->|"Signed HTTP POST"| L
-    G -->|"Signed HTTP POST"| M
+<img width="3902" height="612" alt="mermaid-diagram" src="https://github.com/user-attachments/assets/775075f2-6a0f-49c8-af4b-581a9225ff7f" />
