@@ -17,7 +17,12 @@ services:
     restart: unless-stopped    
 
   api:
-    build: . 
+    build: .
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    depends_on:
+      db:
+        condition: service_healthy    
     ports:
       - "8000:8000"
     restart: unless-stopped
