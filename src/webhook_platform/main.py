@@ -6,6 +6,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from webhook_platform.db import SessionDep, create_engine, create_sessionmaker
+from webhook_platform.tenants import router as tenants_router
 
 
 @asynccontextmanager
@@ -17,6 +18,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="webhook-delivery-platform", lifespan=lifespan)
+app.include_router(tenants_router)
 
 
 @app.get("/health")
