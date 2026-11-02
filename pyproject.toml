@@ -5,8 +5,11 @@ description = "Multi-tenant service that delivers webhooks reliably"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "asyncpg>=0.32.0",
     "fastapi>=0.162.0",
+    "greenlet>=3.5.6",
     "pydantic-settings>=2.16.2",
+    "sqlalchemy>=2.1.6",
     "uvicorn>=0.54.0",
 ]
 
