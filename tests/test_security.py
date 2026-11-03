@@ -1,7 +1,9 @@
 from webhook_platform.security import (
     API_KEY_PREFIX,
+    WEBHOOK_SECRET_PREFIX,
     display_prefix,
     generate_api_key,
+    generate_webhook_secret,
     hash_api_key,
 )
 
@@ -35,3 +37,10 @@ def test_display_prefix_is_short_and_not_the_whole_key() -> None:
     key = generate_api_key()
     assert display_prefix(key) == key[:8]
     assert len(display_prefix(key)) == 8
+
+
+def test_webhook_secret_has_prefix_and_is_unique() -> None:
+    secrets_ = {generate_webhook_secret() for _ in range(1000)}
+
+    assert len(secrets_) == 1000
+    assert all(s.startswith(WEBHOOK_SECRET_PREFIX) for s in secrets_)
