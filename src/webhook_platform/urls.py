@@ -30,7 +30,6 @@ def validate_destination_url(url: str) -> str:
     if port is not None and not (1 <= port <= 65535):
         raise ValueError("url port is invalid")
 
-    
     try:
         address = ipaddress.ip_address(host)
     except ValueError:
