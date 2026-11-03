@@ -29,7 +29,12 @@ async def _get_owned_endpoint(
 async def create_endpoint(
     payload: EndpointCreate, tenant: CurrentTenant, session: SessionDep
 ) -> EndpointCreated:
-    endpoint = Endpoint(tenant_id=tenant.id, url=payload.url, secret=generate_webhook_secret())
+    endpoint = Endpoint(
+        tenant_id=tenant.id,
+        url=payload.url,
+        event_types=payload.event_types,
+        secret=generate_webhook_secret(),
+    )
     session.add(endpoint)
     await session.commit()
     await session.refresh(endpoint)

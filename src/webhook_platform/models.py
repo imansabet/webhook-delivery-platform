@@ -1,7 +1,9 @@
 import uuid
 from datetime import datetime
+from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, MetaData, String, func
+from sqlalchemy import DateTime, ForeignKey, MetaData, String, Text, UniqueConstraint, func, text
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 NAMING_CONVENTION = {
@@ -48,4 +50,21 @@ class Endpoint(Base):
     )
     url: Mapped[str] = mapped_column(String(2048))
     secret: Mapped[str] = mapped_column(String(64))
+    event_types: Mapped[list[str]] = mapped_column(ARRAY(Text), server_default=text("'{*}'"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Event(Base):
+    __tablename__ = "events"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id", "idempotency_key", name="uq_events_tenant_id_idempotency_key"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, server_default=func.gen_random_uuid())
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"))
+    type: Mapped[str] = mapped_column(String(100))
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    idempotency_key: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
