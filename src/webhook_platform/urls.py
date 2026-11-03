@@ -23,6 +23,15 @@ def validate_destination_url(url: str) -> str:
         raise ValueError("url must include a host")
 
     try:
+        port = parts.port
+    except ValueError as exc:
+        raise ValueError("url port is invalid") from exc
+
+    if port is not None and not (1 <= port <= 65535):
+        raise ValueError("url port is invalid")
+
+    
+    try:
         address = ipaddress.ip_address(host)
     except ValueError:
         _validate_hostname(host)
