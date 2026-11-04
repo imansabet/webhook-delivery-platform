@@ -3,7 +3,7 @@ from collections.abc import Sequence
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from webhook_platform.auth import CurrentTenant
@@ -13,6 +13,7 @@ from webhook_platform.schemas import EndpointCreate, EndpointCreated, EndpointRe
 from webhook_platform.security import generate_webhook_secret
 
 router = APIRouter(prefix="/endpoints", tags=["endpoints"])
+MAX_ENDPOINTS_PER_TENANT = 20
 
 
 async def _get_owned_endpoint(
@@ -29,6 +30,16 @@ async def _get_owned_endpoint(
 async def create_endpoint(
     payload: EndpointCreate, tenant: CurrentTenant, session: SessionDep
 ) -> EndpointCreated:
+    count = (
+        await session.execute(
+            select(func.count()).select_from(Endpoint).where(Endpoint.tenant_id == tenant.id)
+        )
+    ).scalar_one()
+    if count >= MAX_ENDPOINTS_PER_TENANT:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"endpoint limit reached ({MAX_ENDPOINTS_PER_TENANT})",
+        )
     endpoint = Endpoint(
         tenant_id=tenant.id,
         url=payload.url,

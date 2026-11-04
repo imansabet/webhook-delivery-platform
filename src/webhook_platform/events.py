@@ -1,12 +1,12 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Header, HTTPException, Response, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.dialects.postgresql import insert
 
 from webhook_platform.auth import CurrentTenant
 from webhook_platform.db import SessionDep
-from webhook_platform.models import Event
+from webhook_platform.models import Delivery, Endpoint, Event
 from webhook_platform.schemas import EventCreate, EventRead
 
 router = APIRouter(prefix="/events", tags=["events"])
@@ -33,9 +33,26 @@ async def ingest_event(
     )
     created = (await session.execute(insert_statement)).scalar_one_or_none()
     if created is not None:
+        endpoint_ids = (
+            (
+                await session.execute(
+                    select(Endpoint.id).where(
+                        Endpoint.tenant_id == tenant.id,
+                        or_(
+                            Endpoint.event_types.contains([body.type]),
+                            Endpoint.event_types.contains(["*"]),
+                        ),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        session.add_all(
+            Delivery(event_id=created.id, endpoint_id=endpoint_id) for endpoint_id in endpoint_ids
+        )
         await session.commit()
         return created
-
     existing = (
         await session.execute(
             select(Event).where(
