@@ -1,4 +1,6 @@
+import base64
 import hashlib
+import hmac
 import secrets
 
 API_KEY_PREFIX = "whk_"
@@ -18,4 +20,35 @@ def display_prefix(key: str) -> str:
 
 
 def generate_webhook_secret() -> str:
-    return WEBHOOK_SECRET_PREFIX + secrets.token_urlsafe(32)
+    return WEBHOOK_SECRET_PREFIX + base64.b64encode(secrets.token_bytes(32)).decode()
+
+
+def sign_webhook(secret: str, message_id: str, timestamp: int, body: bytes) -> str:
+    key = base64.b64decode(secret.removeprefix(WEBHOOK_SECRET_PREFIX))
+    signed_content = f"{message_id}.{timestamp}.".encode() + body
+    digest = hmac.new(key, signed_content, hashlib.sha256).digest()
+    return "v1," + base64.b64encode(digest).decode()
+
+
+def verify_webhook(
+    secret: str,
+    message_id: str,
+    timestamp_header: str,
+    signature_header: str,
+    body: bytes,
+    *,
+    now: float,
+    tolerance_seconds: int = 300,
+) -> bool:
+    try:
+        timestamp = int(timestamp_header)
+    except ValueError:
+        return False
+    if abs(now - timestamp) > tolerance_seconds:
+        return False
+
+    expected = sign_webhook(secret, message_id, timestamp, body).encode()
+    return any(
+        hmac.compare_digest(candidate.encode(), expected)
+        for candidate in signature_header.split(" ")
+    )
