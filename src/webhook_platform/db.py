@@ -9,12 +9,10 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from webhook_platform.config import get_settings
 
-
-def create_engine() -> AsyncEngine:
+def create_engine(database_url: str) -> AsyncEngine:
     return create_async_engine(
-        get_settings().database_url.get_secret_value(),
+        database_url,
         pool_pre_ping=True,
         connect_args={"timeout": 3},
     )

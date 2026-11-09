@@ -7,6 +7,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     MetaData,
     String,
     Text,
@@ -95,6 +96,11 @@ class Delivery(Base):
     __table_args__ = (
         UniqueConstraint("event_id", "endpoint_id", name="uq_deliveries_event_id_endpoint_id"),
         CheckConstraint(f"status in ({_STATUS_VALUES})", name="status_valid"),
+        Index(
+            "ix_deliveries_unpublished",
+            "created_at",
+            postgresql_where=text("published_at is null"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, server_default=func.gen_random_uuid())
@@ -105,3 +111,4 @@ class Delivery(Base):
     )
     status: Mapped[str] = mapped_column(String(20), server_default=DeliveryStatus.PENDING.value)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

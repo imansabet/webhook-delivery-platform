@@ -5,6 +5,7 @@ from fastapi import FastAPI, HTTPException
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
+from webhook_platform.config import get_settings
 from webhook_platform.db import SessionDep, create_engine, create_sessionmaker
 from webhook_platform.endpoints import router as endpoints_router
 from webhook_platform.events import router as events_router
@@ -13,7 +14,7 @@ from webhook_platform.tenants import router as tenants_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    engine = create_engine()
+    engine = create_engine(get_settings().database_url.get_secret_value())
     app.state.sessionmaker = create_sessionmaker(engine)
     yield
     await engine.dispose()
