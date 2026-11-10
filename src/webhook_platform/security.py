@@ -2,6 +2,8 @@ import base64
 import hashlib
 import hmac
 import secrets
+import binascii
+
 
 API_KEY_PREFIX = "whk_"
 WEBHOOK_SECRET_PREFIX = "whsec_"
@@ -52,3 +54,16 @@ def verify_webhook(
         hmac.compare_digest(candidate.encode(), expected)
         for candidate in signature_header.split(" ")
     )
+
+
+def validate_webhook_secret(secret: str) -> bool:
+    if not secret.startswith(WEBHOOK_SECRET_PREFIX):
+        return False
+
+    encoded_key = secret.removeprefix(WEBHOOK_SECRET_PREFIX)
+    try:
+        key = base64.b64decode(encoded_key, validate=True)
+    except (ValueError, base64.binascii.Error):
+        return False
+
+    return len(key) == 32

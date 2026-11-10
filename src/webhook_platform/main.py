@@ -1,3 +1,4 @@
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -11,9 +12,17 @@ from webhook_platform.endpoints import router as endpoints_router
 from webhook_platform.events import router as events_router
 from webhook_platform.tenants import router as tenants_router
 
+logger = logging.getLogger("webhook_platform")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    settings = get_settings()
+    if settings.allow_private_destinations:
+        logger.warning(
+            "ALLOW_PRIVATE_DESTINATION is enabled : SSRF protection is relaxed."
+            "Never use this in production"
+        )
     engine = create_engine(get_settings().database_url.get_secret_value())
     app.state.sessionmaker = create_sessionmaker(engine)
     yield

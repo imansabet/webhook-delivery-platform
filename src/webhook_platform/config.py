@@ -14,6 +14,7 @@ class Settings(BaseSettings):
 
     database_url: SecretStr
     admin_token: SecretStr
+    allow_private_destinations: bool = False
 
 
 class RelaySettings(DatabaseSettings):

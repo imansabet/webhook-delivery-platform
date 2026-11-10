@@ -5,7 +5,7 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
-from webhook_platform.urls import MAX_URL_LENGTH, validate_destination_url
+from webhook_platform.urls import MAX_URL_LENGTH
 
 MAX_PAYLOAD_BYTES = 262_144
 
@@ -44,11 +44,6 @@ class EndpointCreate(BaseModel):
 
     url: str = Field(max_length=MAX_URL_LENGTH)
     event_types: list[Subscription] = Field(min_length=1, max_length=20)
-
-    @field_validator("url")
-    @classmethod
-    def check_url(cls, value: str) -> str:
-        return validate_destination_url(value)
 
     @field_validator("event_types")
     @classmethod

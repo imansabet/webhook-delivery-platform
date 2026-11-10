@@ -1,5 +1,8 @@
 import pytest
 
+from webhook_platform.config import Settings, get_settings
+from webhook_platform.main import app
+
 pytestmark = pytest.mark.integration
 
 
@@ -59,3 +62,23 @@ async def test_deleting_an_endpoint_removes_its_deliveries(
 
     assert response.status_code == 204
     assert await scalar("select count(*) from deliveries") == 1
+
+
+async def test_private_destinations_are_accepted_only_when_explicitly_allowed(
+    client, make_tenant, database_url
+):
+    account = await make_tenant("acme")
+    body = {"url": "http://receiver:8080/hook", "event_types": ["*"]}
+
+    denied = await client.post("/endpoints", json=body, headers=account.headers)
+    app.dependency_overrides[get_settings] = lambda: Settings(
+        _env_file=None,
+        database_url=database_url,
+        admin_token="unused-in-this-test",
+        allow_private_destinations=True,
+    )
+
+    allowed = await client.post("/endpoints", json=body, headers=account.headers)
+    assert denied.status_code == 422
+    assert denied.json()["detail"][0]["loc"] == ["body", "url"]
+    assert allowed.status_code == 201

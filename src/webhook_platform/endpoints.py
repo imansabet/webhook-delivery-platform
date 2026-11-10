@@ -3,14 +3,16 @@ from collections.abc import Sequence
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
+from fastapi.exceptions import RequestValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from webhook_platform.auth import CurrentTenant
+from webhook_platform.auth import CurrentTenant, SettingsDep
 from webhook_platform.db import SessionDep
 from webhook_platform.models import Endpoint, Tenant
 from webhook_platform.schemas import EndpointCreate, EndpointCreated, EndpointRead
 from webhook_platform.security import generate_webhook_secret
+from webhook_platform.urls import validate_destination_url
 
 router = APIRouter(prefix="/endpoints", tags=["endpoints"])
 MAX_ENDPOINTS_PER_TENANT = 20
@@ -28,8 +30,22 @@ async def _get_owned_endpoint(
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_endpoint(
-    payload: EndpointCreate, tenant: CurrentTenant, session: SessionDep
+    payload: EndpointCreate, tenant: CurrentTenant, session: SessionDep, settings: SettingsDep
 ) -> EndpointCreated:
+    try:
+        validate_destination_url(payload.url, allow_private=settings.allow_private_destinations)
+    except ValueError as exc:
+        raise RequestValidationError(
+            [
+                {
+                    "type": "value_error",
+                    "loc": ("body", "url"),
+                    "msg": str(exc),
+                    "input": payload.url,
+                }
+            ]
+        ) from exc
+
     count = (
         await session.execute(
             select(func.count()).select_from(Endpoint).where(Endpoint.tenant_id == tenant.id)
