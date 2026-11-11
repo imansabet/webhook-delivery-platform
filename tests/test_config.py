@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from webhook_platform.config import RelaySettings, Settings
+from webhook_platform.config import RelaySettings, Settings, WorkerSettings
 
 URL = "postgresql+asyncpg://user:secret-pass@localhost:5432/db"
 TOKEN = "admin-secret-token"
@@ -59,3 +59,24 @@ def test_relay_batch_size_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with pytest.raises(ValidationError):
         RelaySettings(_env_file=None)
+
+
+def test_worker_settings_have_safe_defaults_and_need_no_admin_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DATABASE_URL", URL)
+    monkeypatch.delenv("ADMIN_TOKEN", raising=False)
+
+    settings = WorkerSettings(_env_file=None)
+
+    assert settings.consumer_group == "delivery-workers"
+    assert settings.worker_concurrency == 10
+    assert settings.allow_private_destinations is False
+
+
+def test_worker_concurrency_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", URL)
+    monkeypatch.setenv("WORKER_CONCURRENCY", "0")
+
+    with pytest.raises(ValidationError):
+        WorkerSettings(_env_file=None)

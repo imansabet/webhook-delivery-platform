@@ -4,7 +4,6 @@ import hmac
 import secrets
 import binascii
 
-
 API_KEY_PREFIX = "whk_"
 WEBHOOK_SECRET_PREFIX = "whsec_"
 
@@ -63,7 +62,7 @@ def validate_webhook_secret(secret: str) -> bool:
     encoded_key = secret.removeprefix(WEBHOOK_SECRET_PREFIX)
     try:
         key = base64.b64decode(encoded_key, validate=True)
-    except (ValueError, base64.binascii.Error):
+    except (ValueError,binascii.Error):
         return False
 
     return len(key) == 32

@@ -17,11 +17,21 @@ class Settings(BaseSettings):
     allow_private_destinations: bool = False
 
 
-class RelaySettings(DatabaseSettings):
+class KafkaSettings(DatabaseSettings):
     kafka_bootstrap_servers: str = "localhost:9092"
     deliveries_topic: str = "deliveries"
+
+
+class RelaySettings(KafkaSettings):
     relay_batch_size: int = Field(default=100, ge=1, le=1000)
     relay_poll_interval_seconds: float = Field(default=1.0, gt=0)
+
+
+class WorkerSettings(KafkaSettings):
+    consumer_group: str = "delivery-workers"
+    worker_concurrency: int = Field(default=10, ge=1, le=100)
+    worker_batch_size: int = Field(default=50, ge=1, le=500)
+    allow_private_destinations: bool = False
 
 
 @lru_cache
@@ -32,3 +42,8 @@ def get_settings() -> Settings:
 @lru_cache
 def get_relay_settings() -> RelaySettings:
     return RelaySettings()
+
+
+@lru_cache
+def get_worker_settings() -> WorkerSettings:
+    return WorkerSettings()

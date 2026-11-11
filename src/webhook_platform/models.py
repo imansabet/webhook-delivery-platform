@@ -112,3 +112,21 @@ class Delivery(Base):
     status: Mapped[str] = mapped_column(String(20), server_default=DeliveryStatus.PENDING.value)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class DeliveryAttempt(Base):
+    __tablename__ = "delivery_attempts"
+    __table_args__ = (
+        UniqueConstraint(
+            "delivery_id", "attempt_number", name="uq_delivery_attempts_delivery_id_attempt_number"
+        ),
+        CheckConstraint("attempt_number >= 1", name="attempt_number_positive"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, server_default=func.gen_random_uuid())
+    delivery_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("deliveries.id", ondelete="CASCADE"))
+    attempt_number: Mapped[int]
+    status_code: Mapped[int | None]
+    error: Mapped[str | None] = mapped_column(String(100))
+    duration_ms: Mapped[int]
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

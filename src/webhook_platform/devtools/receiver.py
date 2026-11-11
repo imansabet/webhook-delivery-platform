@@ -17,7 +17,7 @@ app = FastAPI(title="webhook-dev-receiver")
 
 secrets_registry: list[str] = []
 received: deque[dict[str, Any]] = deque(maxlen=100)
-seen_ids: set[str] = set()
+seen_ids: set[tuple[str, str]] = set()
 
 
 class SecretIn(BaseModel):
@@ -41,9 +41,10 @@ async def record_request(request: Request) -> bool:
         verify_webhook(secret, message_id, timestamp, signature, body, now=time.time())
         for secret in secrets_registry
     )
-    duplicate = verified and message_id in seen_ids
+    key = (request.url.path, message_id)
+    duplicate = verified and key in seen_ids
     if verified:
-        seen_ids.add(message_id)
+        seen_ids.add(key)
 
     received.append(
         {

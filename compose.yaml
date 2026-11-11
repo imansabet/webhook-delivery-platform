@@ -93,6 +93,23 @@ services:
       timeout: 3s 
       retries: 3
     restart: unless-stopped
+  
+  worker:
+    build: .
+    command: ["python","-m","webhook_platform.worker"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      ALLOW_PRIVATE_DESTINATIONS: ${ALLOW_PRIVATE_DESTINATIONS:-false}
+    healthcheck:
+      disable: true
+    depends_on: 
+      db:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed-successfully
+    restart: unless-stopped      
+
 
 volumes:
   pgdata:

@@ -146,3 +146,17 @@ def send_event(client: httpx.AsyncClient) -> Callable[..., Awaitable[httpx.Respo
         )
 
     return send
+
+
+@pytest.fixture
+def sessionmaker(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
+    return async_sessionmaker(engine, expire_on_commit=False)
+
+
+@pytest_asyncio.fixture
+async def column(engine: AsyncEngine) -> Callable[..., Awaitable[list[Any]]]:
+    async def run(sql: str, **params: Any) -> list[Any]:
+        async with engine.connect() as connection:
+            return [row[0] for row in await connection.execute(text(sql), params)]
+
+    return run

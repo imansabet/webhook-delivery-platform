@@ -1,5 +1,5 @@
 from collections.abc import AsyncIterator
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import (
@@ -10,11 +10,15 @@ from sqlalchemy.ext.asyncio import (
 )
 
 
-def create_engine(database_url: str) -> AsyncEngine:
+def create_engine(database_url: str, *, pool_size: int | None = None) -> AsyncEngine:
+    options: dict[str, Any] = {}
+    if pool_size is not None:
+        options.update(pool_size=pool_size, max_overflow=0)
     return create_async_engine(
         database_url,
         pool_pre_ping=True,
         connect_args={"timeout": 3},
+        **options,
     )
 
 
