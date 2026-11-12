@@ -18,6 +18,7 @@ app = FastAPI(title="webhook-dev-receiver")
 secrets_registry: list[str] = []
 received: deque[dict[str, Any]] = deque(maxlen=100)
 seen_ids: set[tuple[str, str]] = set()
+flaky_counts: dict[tuple[str, str], int] = {}
 
 
 class SecretIn(BaseModel):
@@ -95,3 +96,12 @@ async def list_received() -> list[dict[str, Any]]:
 async def clear_received() -> None:
     received.clear()
     seen_ids.clear()
+    flaky_counts.clear()
+
+
+@app.post("/flaky/{failures}")
+async def flaky(request: Request, failures: Annotated[int, Path(ge=0, le=20)]) -> Response:
+    await record_request(request)
+    key = (request.url.path, request.headers.get("webhook-id", ""))
+    flaky_counts[key] = flaky_counts.get(key, 0) + 1
+    return Response(status_code=503 if flaky_counts[key] <= failures else 200)

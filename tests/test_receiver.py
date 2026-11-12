@@ -15,6 +15,7 @@ def reset_receiver_state() -> None:
     receiver.secrets_registry.clear()
     receiver.received.clear()
     receiver.seen_ids.clear()
+    receiver.flaky_counts.clear()
 
 
 def signed_headers(secret: str, message_id: str, timestamp: int | None = None) -> dict[str, str]:
@@ -88,3 +89,20 @@ def test_invalid_secret_is_rejected_and_log_can_be_cleared() -> None:
     assert len(client.get("/dev/received").json()) == 1
     assert client.delete("/dev/received").status_code == 204
     assert client.get("/dev/received").json() == []
+
+
+def test_flaky_endpoint_fails_the_requested_number_of_times_per_message() -> None:
+    secret = generate_webhook_secret()
+    register(secret)
+
+    statuses = [
+        client.post("/flaky/2", content=BODY, headers=signed_headers(secret, "msg_1")).status_code
+        for _ in range(4)
+    ]
+    other_message = client.post(
+        "/flaky/2", content=BODY, headers=signed_headers(secret, "msg_2")
+    ).status_code
+
+    assert statuses == [503, 503, 200, 200]
+    assert other_message == 503
+    assert client.post("/flaky/21", content=BODY).status_code == 422

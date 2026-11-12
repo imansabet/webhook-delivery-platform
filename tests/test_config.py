@@ -80,3 +80,11 @@ def test_worker_concurrency_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with pytest.raises(ValidationError):
         WorkerSettings(_env_file=None)
+
+
+def test_retry_delay_scale_can_only_shorten_delays(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", URL)
+    monkeypatch.setenv("RETRY_DELAY_SCALE", "2")
+
+    with pytest.raises(ValidationError):
+        WorkerSettings(_env_file=None)

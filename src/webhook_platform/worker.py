@@ -2,10 +2,13 @@ import asyncio
 import contextlib
 import json
 import logging
+import random
 import signal
 import uuid
 from collections import Counter
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+from datetime import timedelta
 from typing import Any
 
 import httpx
@@ -22,6 +25,7 @@ from webhook_platform.models import (
     Endpoint,
     Event,
 )
+from webhook_platform.retry import DEFAULT_RETRY_POLICY, RetryPolicy, is_retryable
 from webhook_platform.sender import DeliveryResult, create_http_client, send_webhook
 
 logger = logging.getLogger("webhook_platform.worker")
@@ -29,6 +33,14 @@ logger = logging.getLogger("webhook_platform.worker")
 ERROR_BACKOFF_SECONDS = 5.0
 
 SendFunction = Callable[..., Awaitable[DeliveryResult]]
+
+
+@dataclass(frozen=True)
+class DeliveryContext:
+    allow_private: bool = False
+    send: SendFunction = send_webhook
+    retry_policy: RetryPolicy = DEFAULT_RETRY_POLICY
+    rng: Callable[[], float] = random.random
 
 
 def build_body(event: Event) -> bytes:
@@ -45,13 +57,11 @@ async def process_delivery(
     session: AsyncSession,
     client: httpx.AsyncClient | None,
     delivery_id: uuid.UUID,
-    *,
-    allow_private: bool,
-    send: SendFunction = send_webhook,
+    context: DeliveryContext,
 ) -> str:
     row = (
         await session.execute(
-            select(Delivery, Event, Endpoint)
+            select(Delivery, Event, Endpoint, func.now())
             .join(Event, Event.id == Delivery.event_id)
             .join(Endpoint, Endpoint.id == Delivery.endpoint_id)
             .where(Delivery.id == delivery_id)
@@ -61,17 +71,19 @@ async def process_delivery(
     if row is None:
         return "missing"
 
-    delivery, event, endpoint = row
+    delivery, event, endpoint, now = row
     if delivery.status != DeliveryStatus.PENDING:
         return "skipped"
+    if delivery.next_attempt_at is not None and delivery.next_attempt_at > now:
+        return "not_due"
 
-    result = await send(
+    result = await context.send(
         client,
         url=endpoint.url,
         secret=endpoint.secret,
         message_id=str(event.id),
         body=build_body(event),
-        allow_private=allow_private,
+        allow_private=context.allow_private,
     )
 
     previous_attempts = (
@@ -81,28 +93,46 @@ async def process_delivery(
             .where(DeliveryAttempt.delivery_id == delivery.id)
         )
     ).scalar_one()
+    attempt_number = previous_attempts + 1
     session.add(
         DeliveryAttempt(
             delivery_id=delivery.id,
-            attempt_number=previous_attempts + 1,
+            attempt_number=attempt_number,
             status_code=result.status_code,
             error=result.error,
             duration_ms=result.duration_ms,
         )
     )
-    outcome = DeliveryStatus.SUCCEEDED if result.ok else DeliveryStatus.FAILED
-    delivery.status = outcome.value
+
+    if result.ok:
+        outcome = "succeeded"
+        delivery.status = DeliveryStatus.SUCCEEDED.value
+        delivery.next_attempt_at = None
+    else:
+        delay = (
+            context.retry_policy.delay_after(attempt_number, context.rng)
+            if is_retryable(result)
+            else None
+        )
+        if delay is None:
+            outcome = "failed"
+            delivery.status = DeliveryStatus.FAILED.value
+            delivery.next_attempt_at = None
+        else:
+            outcome = "retry_scheduled"
+            failed_at = (await session.execute(select(func.clock_timestamp()))).scalar_one()
+            delivery.published_at = None
+            delivery.next_attempt_at = failed_at + timedelta(seconds=delay)
+
     await session.commit()
-    return outcome.value
+    return outcome
 
 
 async def handle_message(
     sessionmaker: async_sessionmaker[AsyncSession],
     client: httpx.AsyncClient | None,
     value: bytes,
-    *,
-    allow_private: bool,
-    send: SendFunction = send_webhook,
+    context: DeliveryContext,
 ) -> str:
     try:
         delivery_id = uuid.UUID(str(json.loads(value)["delivery_id"]))
@@ -111,9 +141,7 @@ async def handle_message(
         return "malformed"
 
     async with sessionmaker() as session:
-        outcome = await process_delivery(
-            session, client, delivery_id, allow_private=allow_private, send=send
-        )
+        outcome = await process_delivery(session, client, delivery_id, context)
     logger.info("delivery %s: %s", delivery_id, outcome)
     return outcome
 
@@ -122,18 +150,15 @@ async def handle_batch(
     values: list[bytes],
     sessionmaker: async_sessionmaker[AsyncSession],
     client: httpx.AsyncClient | None,
+    context: DeliveryContext,
     *,
     concurrency: int,
-    allow_private: bool,
-    send: SendFunction = send_webhook,
 ) -> list[str]:
     semaphore = asyncio.Semaphore(concurrency)
 
     async def handle_one(value: bytes) -> str:
         async with semaphore:
-            return await handle_message(
-                sessionmaker, client, value, allow_private=allow_private, send=send
-            )
+            return await handle_message(sessionmaker, client, value, context)
 
     return list(await asyncio.gather(*(handle_one(value) for value in values)))
 
@@ -146,6 +171,10 @@ async def run_worker(
     settings: WorkerSettings,
     stop: asyncio.Event,
 ) -> None:
+    context = DeliveryContext(
+        allow_private=settings.allow_private_destinations,
+        retry_policy=RetryPolicy(scale=settings.retry_delay_scale),
+    )
     while not stop.is_set():
         batches = await consumer.getmany(timeout_ms=1000, max_records=settings.worker_batch_size)
         if not batches:
@@ -157,8 +186,8 @@ async def run_worker(
                 values,
                 sessionmaker,
                 client,
+                context,
                 concurrency=settings.worker_concurrency,
-                allow_private=settings.allow_private_destinations,
             )
             await consumer.commit()
             logger.info("batch done: %s", dict(Counter(outcomes)))
@@ -197,10 +226,11 @@ async def main() -> None:
     async with create_http_client() as client:
         await consumer.start()
         logger.info(
-            "worker started, topic=%s group=%s concurrency=%d",
+            "worker started, topic=%s group=%s concurrency=%d retry_scale=%s",
             settings.deliveries_topic,
             settings.consumer_group,
             settings.worker_concurrency,
+            settings.retry_delay_scale,
         )
         try:
             await run_worker(

@@ -8,7 +8,7 @@ from collections.abc import Awaitable
 from typing import Any, Protocol
 
 from aiokafka import AIOKafkaProducer
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from webhook_platform.config import get_relay_settings
@@ -39,7 +39,13 @@ async def publish_batch(
     rows = (
         await session.execute(
             select(Delivery.id, Delivery.event_id, Delivery.endpoint_id)
-            .where(Delivery.published_at.is_(None))
+            .where(
+                Delivery.published_at.is_(None),
+                or_(
+                    Delivery.next_attempt_at.is_(None),
+                    Delivery.next_attempt_at <= func.now(),
+                ),
+            )
             .order_by(Delivery.created_at)
             .limit(batch_size)
             .with_for_update(skip_locked=True)

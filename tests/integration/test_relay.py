@@ -98,3 +98,18 @@ async def test_concurrent_relays_never_publish_the_same_delivery(
     assert sum(counts) == 10
     ids = [json.loads(value)["delivery_id"] for _, _, value in first.sent + second.sent]
     assert len(ids) == len(set(ids)) == 10
+
+
+async def test_deliveries_waiting_for_a_retry_are_published_only_when_due(
+    make_tenant, add_endpoint, send_event, sessionmaker, execute
+):
+    account = await make_tenant("acme")
+    await add_endpoint(account)
+    await send_event(account, "k1")
+    await execute("update deliveries set next_attempt_at = now() + interval '1 hour'")
+    producer = FakeProducer()
+
+    assert await run_once(sessionmaker, producer) == 0
+
+    await execute("update deliveries set next_attempt_at = now() - interval '1 second'")
+    assert await run_once(sessionmaker, producer) == 1

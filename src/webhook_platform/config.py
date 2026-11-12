@@ -32,6 +32,7 @@ class WorkerSettings(KafkaSettings):
     worker_concurrency: int = Field(default=10, ge=1, le=100)
     worker_batch_size: int = Field(default=50, ge=1, le=500)
     allow_private_destinations: bool = False
+    retry_delay_scale: float = Field(default=1.0, gt=0, le=1.0)
 
 
 @lru_cache

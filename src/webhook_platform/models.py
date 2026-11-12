@@ -112,6 +112,7 @@ class Delivery(Base):
     status: Mapped[str] = mapped_column(String(20), server_default=DeliveryStatus.PENDING.value)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class DeliveryAttempt(Base):

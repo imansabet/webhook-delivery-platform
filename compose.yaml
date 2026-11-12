@@ -109,7 +109,7 @@ services:
       kafka-init:
         condition: service_completed-successfully
     restart: unless-stopped      
-
+    RETRY_DELAY_SCALE: ${RETRY_DELAY_SCALE:-1.0}
 
 volumes:
   pgdata:
