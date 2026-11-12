@@ -192,9 +192,7 @@ async def test_batch_respects_the_concurrency_limit(
 
     context = DeliveryContext(allow_private=False, send=send)
 
-    outcomes = await handle_batch(
-        values, sessionmaker, None, context, concurrency=2
-    )
+    outcomes = await handle_batch(values, sessionmaker, None, context, concurrency=2)
     assert outcomes == ["succeeded"] * 5
     assert send.max_active == 2
     assert await scalar("select count(*) from deliveries where status = 'succeeded'") == 5
