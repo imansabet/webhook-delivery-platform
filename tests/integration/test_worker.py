@@ -258,3 +258,25 @@ async def test_permanent_errors_fail_without_retrying(
     assert outcome == "failed"
     assert await scalar("select status from deliveries") == "failed"
     assert await scalar("select count(*) from delivery_attempts") == 1
+
+
+async def test_replay_starts_a_fresh_retry_cycle(
+    client, make_tenant, add_endpoint, send_event, sessionmaker, scalar, column, execute
+):
+    account = await make_tenant("acme")
+    await add_endpoint(account)
+    await send_event(account, "k1")
+    [delivery_id] = await column("select id from deliveries")
+    policy = RetryPolicy(delays=(1.0,), jitter=0.0)
+    send = FakeSend(SERVER_ERROR)
+
+    first = await run(sessionmaker, send, delivery_id, retry_policy=policy)
+    await make_due(execute)
+    second = await run(sessionmaker, send, delivery_id, retry_policy=policy)
+    replay = await client.post(f"/deliveries/{delivery_id}/replay", headers=account.headers)
+    third = await run(sessionmaker, send, delivery_id, retry_policy=policy)
+
+    assert (first, second) == ("retry_scheduled", "failed")
+    assert replay.status_code == 202
+    assert third == "retry_scheduled"
+    assert await scalar("select max(attempt_number) from delivery_attempts") == 3

@@ -1,13 +1,16 @@
+import uuid
+from collections.abc import Sequence
 from typing import Annotated
 
 from fastapi import APIRouter, Header, HTTPException, Response, status
 from sqlalchemy import or_, select
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from webhook_platform.auth import CurrentTenant
 from webhook_platform.db import SessionDep
-from webhook_platform.models import Delivery, Endpoint, Event
-from webhook_platform.schemas import EventCreate, EventRead
+from webhook_platform.models import Delivery, Endpoint, Event, Tenant
+from webhook_platform.schemas import DeliveryRead, EventCreate, EventRead
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -68,3 +71,32 @@ async def ingest_event(
         )
     response.status_code = status.HTTP_200_OK
     return existing
+
+
+async def get_owned_event(session: AsyncSession, tenant: Tenant, event_id: uuid.UUID) -> Event:
+    event = (
+        await session.execute(
+            select(Event).where(Event.id == event_id, Event.tenant_id == tenant.id)
+        )
+    ).scalar_one_or_none()
+    if event is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="event not found")
+    return event
+
+
+@router.get("/{event_id}", response_model=EventRead)
+async def read_event(event_id: uuid.UUID, tenant: CurrentTenant, session: SessionDep) -> Event:
+    return await get_owned_event(session, tenant, event_id)
+
+
+@router.get("/{event_id}/deliveries", response_model=list[DeliveryRead])
+async def list_event_deliveries(
+    event_id: uuid.UUID, tenant: CurrentTenant, session: SessionDep
+) -> Sequence[Delivery]:
+    await get_owned_event(session, tenant, event_id)
+    statement = (
+        select(Delivery)
+        .where(Delivery.event_id == event_id)
+        .order_by(Delivery.created_at, Delivery.id)
+    )
+    return (await session.execute(statement)).scalars().all()

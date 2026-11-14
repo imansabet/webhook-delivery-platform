@@ -5,6 +5,7 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
+from webhook_platform.models import DeliveryStatus
 from webhook_platform.urls import MAX_URL_LENGTH
 
 MAX_PAYLOAD_BYTES = 262_144
@@ -84,3 +85,28 @@ class EventRead(BaseModel):
     type: str
     payload: dict[str, Any]
     created_at: datetime
+
+
+class DeliveryAttemptRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    attempt_number: int
+    status_code: int | None
+    error: str | None
+    duration_ms: int
+    created_at: datetime
+
+
+class DeliveryRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    event_id: uuid.UUID
+    endpoint_id: uuid.UUID
+    status: DeliveryStatus
+    next_attempt_at: datetime | None
+    created_at: datetime
+
+
+class DeliveryDetail(DeliveryRead):
+    attempts: list[DeliveryAttemptRead]

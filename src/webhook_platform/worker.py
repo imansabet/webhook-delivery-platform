@@ -94,6 +94,7 @@ async def process_delivery(
         )
     ).scalar_one()
     attempt_number = previous_attempts + 1
+    cycle_attempt = attempt_number - delivery.cycle_start_attempt
     session.add(
         DeliveryAttempt(
             delivery_id=delivery.id,
@@ -110,7 +111,7 @@ async def process_delivery(
         delivery.next_attempt_at = None
     else:
         delay = (
-            context.retry_policy.delay_after(attempt_number, context.rng)
+            context.retry_policy.delay_after(cycle_attempt, context.rng)
             if is_retryable(result)
             else None
         )

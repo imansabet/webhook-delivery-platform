@@ -1,8 +1,7 @@
 import uuid
 from collections.abc import Sequence
-from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, status
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from webhook_platform.auth import CurrentTenant, SettingsDep
 from webhook_platform.db import SessionDep
 from webhook_platform.models import Endpoint, Tenant
+from webhook_platform.pagination import Limit, Offset
 from webhook_platform.schemas import EndpointCreate, EndpointCreated, EndpointRead
 from webhook_platform.security import generate_webhook_secret
 from webhook_platform.urls import validate_destination_url
@@ -72,8 +72,8 @@ async def create_endpoint(
 async def list_endpoints(
     tenant: CurrentTenant,
     session: SessionDep,
-    limit: Annotated[int, Query(ge=1, le=100)] = 50,
-    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Limit = 50,
+    offset: Offset = 0,
 ) -> Sequence[Endpoint]:
     statement = (
         select(Endpoint)
